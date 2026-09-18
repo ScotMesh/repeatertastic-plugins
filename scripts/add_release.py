@@ -118,6 +118,49 @@ def version_key(v):
             for p in str(v).split("+")[0].split("-")[0].split(".")]
 
 
+def build_release(manifest, asset, published, sha256, size, arches, repo, tag, args, detail):
+    """The release object as the index and the plugin file both carry it."""
+    release = {
+        "version": str(manifest["version"]),
+        "api": int(manifest.get("api", 1)),
+        "released": published,
+        "url": f"https://github.com/{repo}/releases/download/{tag}/{asset['name']}",
+        "sha256": sha256,
+        "size": size,
+        "arches": arches,
+    }
+    if args.notes:
+        release["notes"] = args.notes
+    # min_host isn't in the manifest: it is a judgement about which hosts can run this build, so
+    # it carries over from the last release unless --min-host says otherwise.
+    if args.min_host:
+        release["min_host"] = args.min_host
+    elif detail["releases"]:
+        previous = max(detail["releases"], key=lambda r: version_key(r["version"]))
+        if previous.get("min_host"):
+            release["min_host"] = previous["min_host"]
+    # Keep the schema's field order, so the diff on an update is only the values.
+    order = ["version", "api", "min_host", "released", "url", "sha256", "size", "arches", "notes"]
+    return {k: release[k] for k in order if k in release}
+
+
+def new_entry(manifest, pid, repo, logo_path):
+    """A plugin nobody has listed yet: what the manifest knows, for the pull request to improve."""
+    summary = (manifest.get("description") or "").split("\n")[0][:140]
+    return {
+        "id": pid,
+        "name": manifest.get("name", pid),
+        "summary": summary or "TODO: one line for the card",
+        "description": manifest.get("description", ""),
+        "author": manifest.get("author", ""),
+        "homepage": manifest.get("homepage", f"https://github.com/{repo}"),
+        "license": manifest.get("license", ""),
+        "logo": logo_path or f"logos/{pid}.png",
+        "permissions": list(manifest.get("permissions", [])),
+        "network": list(manifest.get("network", [])),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", help="owner/name of the plugin's GitHub repo")
@@ -142,33 +185,9 @@ def main():
     if version != args.tag.lstrip("v"):
         sys.exit(f"the bundle says version {version} but the tag is {args.tag}")
 
-    release = {
-        "version": version,
-        "api": int(manifest.get("api", 1)),
-        "released": published,
-        "url": f"https://github.com/{args.repo}/releases/download/{args.tag}/{asset['name']}",
-        "sha256": sha256,
-        "size": size,
-        "arches": arches,
-    }
-    if manifest.get("min_host"):
-        release["min_host"] = str(manifest["min_host"])
-    if args.notes:
-        release["notes"] = args.notes
-
     detail = load(f"plugins/{pid}.json", {"id": pid, "releases": []})
-    # min_host isn't in the manifest: it is a judgement about which hosts can run this build, so
-    # it carries over from the last release unless --min-host says otherwise.
-    if args.min_host:
-        release["min_host"] = args.min_host
-    elif "min_host" not in release and detail["releases"]:
-        previous = max(detail["releases"], key=lambda r: version_key(r["version"]))
-        if previous.get("min_host"):
-            release["min_host"] = previous["min_host"]
-    # Keep the schema's field order, so the diff on an update is only the values.
-    order = ["version", "api", "min_host", "released", "url", "sha256", "size", "arches", "notes"]
-    release = {k: release[k] for k in order if k in release}
-
+    release = build_release(manifest, asset, published, sha256, size, arches,
+                            args.repo, args.tag, args, detail)
     detail["releases"] = [r for r in detail["releases"] if r["version"] != version] + [release]
     detail["releases"].sort(key=lambda r: version_key(r["version"]))
     save(f"plugins/{pid}.json", detail)
@@ -183,32 +202,20 @@ def main():
     index = load("index.json", {"version": 1, "plugins": []})
     entry = next((p for p in index["plugins"] if p["id"] == pid), None)
     if entry is None:
-        # A plugin nobody has listed yet: fill in what the manifest knows and leave the editorial
-        # fields for the pull request to improve.
-        entry = {
-            "id": pid,
-            "name": manifest.get("name", pid),
-            "summary": ((manifest.get("description") or "").split("\n")[0][:140]
-                        or "TODO: one line for the card"),
-            "description": manifest.get("description", ""),
-            "author": manifest.get("author", ""),
-            "homepage": manifest.get("homepage", f"https://github.com/{args.repo}"),
-            "license": manifest.get("license", ""),
-            "logo": logo_path or f"logos/{pid}.png",
-            "permissions": list(manifest.get("permissions", [])),
-            "network": list(manifest.get("network", [])),
-        }
+        entry = new_entry(manifest, pid, args.repo, logo_path)
         index["plugins"].append(entry)
         index["plugins"].sort(key=lambda p: p["name"].lower())
-        print(f"{pid} is new here: check its summary, logo and tags before merging")
+        print(f"{pid} is new here: check its summary and tags before merging")
     else:
         # The permissions on the card have to be the ones the plugin actually asks for.
         entry["permissions"] = list(manifest.get("permissions", []))
-        if logo_path:
-            entry["logo"] = logo_path
         if manifest.get("network"):
             entry["network"] = list(manifest["network"])
+        if logo_path:
+            entry["logo"] = logo_path
 
+    # Never move latest backwards: re-running this for an older tag would otherwise offer nodes a
+    # downgrade and break the store's own consistency check.
     current = entry.get("latest") or {}
     if version_key(version) >= version_key(current.get("version", "")):
         entry["latest"] = release
