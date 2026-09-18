@@ -1,0 +1,6 @@
+# ruff check scripts/
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B", "S", "BLE", "UP", "SIM", "RUF"]

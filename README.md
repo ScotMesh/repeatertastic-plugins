@@ -34,7 +34,8 @@ does the downloading, the checking and the running.
 Open a pull request with:
 
 - `plugins/<id>.json` — every release you want nodes to be able to install.
-- `logos/<id>.png` — square, 256×256 or larger, transparent background.
+- `logos/<id>.png` (or `.svg`, or `.webp`) — square, 256×256 or larger, transparent
+  background.
 - an entry in `index.json` whose `latest` block is copied from the newest
   release in your `plugins/<id>.json`.
 
@@ -49,7 +50,8 @@ and verify the sha256 — worth doing when a release lands, wasteful otherwise.
 Check it yourself before pushing:
 
 ```
-pip install jsonschema
+pip install jsonschema ruff
+ruff check scripts/                 # the scripts themselves
 python scripts/validate.py          # everything
 python scripts/validate.py --offline # no network
 python scripts/validate.py --deep    # also download and hash every bundle

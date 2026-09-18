@@ -96,10 +96,18 @@ def check_consistency(index):
             fail(where, f"latest disagrees with plugins/{pid}.json on: {', '.join(differ)}")
 
 
+def https_only(url):
+    """A URL is about to be opened on a runner, from a file anyone can open a pull request to
+    change. Anything but https — file:, ftp:, a custom scheme — is refused rather than fetched."""
+    if not url.startswith("https://"):
+        raise ValueError(f"not an https URL: {url!r}")
+    return url
+
+
 def head(url):
-    request = urllib.request.Request(url, method="HEAD")
+    request = urllib.request.Request(https_only(url), method="HEAD")  # noqa: S310 - checked above
     request.add_header("User-Agent", "repeatertastic-plugins/validate")
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
         return response.status, response.headers.get("Content-Length")
 
 
@@ -112,7 +120,7 @@ def check_reachable(index, deep):
             url = release.get("url", "")
             try:
                 status, length = head(url)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - any failure to reach it is the finding
                 fail(where, f"{url} did not answer, {e}")
                 continue
             if status != 200:
@@ -121,17 +129,19 @@ def check_reachable(index, deep):
                 fail(where, f"size says {release.get('size')} but the server serves {length} bytes")
             if deep:
                 digest = hashlib.sha256()
-                with urllib.request.urlopen(url, timeout=300) as response:
+                with urllib.request.urlopen(https_only(url), timeout=300) as response:  # noqa: S310
                     for chunk in iter(lambda: response.read(1 << 20), b""):
                         digest.update(chunk)
                 if digest.hexdigest() != release.get("sha256"):
-                    fail(where, f"sha256 is {digest.hexdigest()}, the index says {release.get('sha256')}")
+                    fail(where, f"sha256 is {digest.hexdigest()}, "
+                                f"the index says {release.get('sha256')}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline", action="store_true", help="skip every network check")
-    parser.add_argument("--deep", action="store_true", help="also download each release and verify its sha256")
+    parser.add_argument("--deep", action="store_true",
+                        help="also download each release and verify its sha256")
     args = parser.parse_args()
 
     index = load("index.json")

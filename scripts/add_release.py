@@ -24,7 +24,7 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 
@@ -35,7 +35,9 @@ ARCHES = {"amd64": "linux/amd64", "arm64": "linux/arm64", "arm": "linux/arm"}
 
 
 def run(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True).stdout
+    """Run gh. The arguments are a list, never a shell string, so a repo or tag containing shell
+    metacharacters is an argument and nothing more."""
+    return subprocess.run(args, check=True, capture_output=True, text=True).stdout  # noqa: S603
 
 
 def release_asset(repo, tag):
@@ -69,8 +71,11 @@ def read_bundle(path):
 
 
 def download(url, dest):
-    request = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
-    with urllib.request.urlopen(request, timeout=300) as response, open(dest, "wb") as f:
+    if not url.startswith("https://"):
+        sys.exit(f"the release asset is not an https URL: {url!r}")
+    headers = {"Accept": "application/octet-stream"}
+    request = urllib.request.Request(url, headers=headers)  # noqa: S310 - https checked above
+    with urllib.request.urlopen(request, timeout=300) as response, open(dest, "wb") as f:  # noqa: S310
         digest = hashlib.sha256()
         size = 0
         for chunk in iter(lambda: response.read(1 << 20), b""):
@@ -100,7 +105,9 @@ def main():
     parser.add_argument("repo", help="owner/name of the plugin's GitHub repo")
     parser.add_argument("tag", help="the release tag, e.g. v0.1.2")
     parser.add_argument("--notes", default="", help="one line for the update card")
-    parser.add_argument("--min-host", default="", help="oldest RepeaterTastic that can run it (kept from the last release otherwise)")
+    parser.add_argument("--min-host", default="",
+                        help="oldest RepeaterTastic that can run it "
+                             "(kept from the last release otherwise)")
     args = parser.parse_args()
 
     asset, published = release_asset(args.repo, args.tag)
@@ -154,7 +161,8 @@ def main():
         entry = {
             "id": pid,
             "name": manifest.get("name", pid),
-            "summary": (manifest.get("description") or "").split("\n")[0][:140] or "TODO: one line for the card",
+            "summary": ((manifest.get("description") or "").split("\n")[0][:140]
+                        or "TODO: one line for the card"),
             "description": manifest.get("description", ""),
             "author": manifest.get("author", ""),
             "homepage": manifest.get("homepage", f"https://github.com/{args.repo}"),
@@ -173,7 +181,7 @@ def main():
             entry["network"] = list(manifest["network"])
 
     entry["latest"] = release
-    index["updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    index["updated"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     save("index.json", index)
 
     print(f"{pid} {version} -> {sha256[:12]}… {size} bytes, {', '.join(arches)}")
