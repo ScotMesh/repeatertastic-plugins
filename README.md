@@ -57,18 +57,33 @@ python scripts/validate.py --deep    # also download and hash every bundle
 
 ### Releasing a new version
 
-Bump `plugins/<id>.json` with the new release, copy it into `index.json`'s
-`latest`, and open a pull request. The sha256 and size are whatever GitHub
-serves:
+Don't type a checksum. Run **Actions → Add a release** with the plugin's repo
+and the tag, and it opens the pull request for you: it downloads the published
+bundle, hashes it, and reads the version, API version, architectures and
+permissions out of the `plugin.yaml` inside. The store then can't disagree with
+what nodes will actually download.
+
+Locally, the same thing:
 
 ```
-curl -sL -o bundle.zip <the release asset URL>
-sha256sum bundle.zip
-stat -c %s bundle.zip
+pip install pyyaml jsonschema
+python scripts/add_release.py ScotMesh/repeatertastic-meshflow v0.1.2 --notes "Faster uploads."
+python scripts/validate.py
 ```
 
-Plugins built from the shared `scripts/bundle.sh` get this opened for them by
-their release workflow.
+`min_host` isn't in the manifest — it's a judgement about which hosts can run a
+build — so it carries over from the previous release unless you pass
+`--min-host`.
+
+A plugin repo can open its own store PR at the end of its release workflow:
+
+```
+gh workflow run add-release.yml -R ScotMesh/repeatertastic-plugins \
+  -f repo=$GITHUB_REPOSITORY -f tag=$GITHUB_REF_NAME
+```
+
+That needs a token with `actions: write` on this repo, which is why the plugin
+repo asks rather than committing here itself.
 
 Old releases stay in `plugins/<id>.json`. A node on an older RepeaterTastic
 installs the newest release whose `min_host` it satisfies, so leaving history in

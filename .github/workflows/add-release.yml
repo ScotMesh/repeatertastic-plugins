@@ -1,0 +1,70 @@
+name: Add a release
+
+# Adds a plugin release to the store and opens the pull request for it. Everything comes out of
+# the published bundle, so nobody types a checksum. Run it from the Actions tab, or from a plugin
+# repo's own release workflow with:
+#
+#   gh workflow run add-release.yml -R ScotMesh/repeatertastic-plugins \
+#     -f repo=$GITHUB_REPOSITORY -f tag=$GITHUB_REF_NAME
+#
+# (that needs a token with actions:write on this repo, which is why the plugin repo asks rather
+# than writing here itself).
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: The plugin's repo, e.g. ScotMesh/repeatertastic-meshflow
+        required: true
+      tag:
+        description: The release tag, e.g. v0.1.2
+        required: true
+      notes:
+        description: One line for the update card
+        required: false
+      min_host:
+        description: Oldest RepeaterTastic that can run it (kept from the last release if blank)
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet jsonschema pyyaml
+
+      - name: Read the release into the store
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/add_release.py "${{ inputs.repo }}" "${{ inputs.tag }}" \
+            ${{ inputs.notes && format('--notes {0}', toJSON(inputs.notes)) || '' }} \
+            ${{ inputs.min_host && format('--min-host {0}', inputs.min_host) || '' }}
+
+      # Offline here: the download just happened, so the URL is known good, and the checksum came
+      # from those very bytes. The pull request's own run does the reachability check.
+      - name: Check the index
+        run: python scripts/validate.py --offline
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: add/${{ inputs.repo }}-${{ inputs.tag }}
+          title: "${{ inputs.repo }} ${{ inputs.tag }}"
+          commit-message: "Add ${{ inputs.repo }} ${{ inputs.tag }}"
+          body: |
+            Added by **Add a release** from [${{ inputs.repo }} ${{ inputs.tag }}](https://github.com/${{ inputs.repo }}/releases/tag/${{ inputs.tag }}).
+
+            The checksum, size, architectures, version and permissions were read out of the
+            published bundle, so they cannot disagree with what nodes will download.
+
+            Put **deep check** in this title to have CI download the bundle and verify the
+            checksum independently before merging.
