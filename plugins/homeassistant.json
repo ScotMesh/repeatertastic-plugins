@@ -1,0 +1,20 @@
+{
+  "id": "homeassistant",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "api": 1,
+      "min_host": "0.4.0",
+      "released": "2026-09-18T18:37:41Z",
+      "url": "https://github.com/ScotMesh/repeatertastic-homeassistant/releases/download/v0.1.0/repeatertastic-homeassistant-v0.1.0.zip",
+      "sha256": "a08216863bbb254b25ef19098f305fcc4be4ca01bbedba96261a58f693a2fa80",
+      "size": 14160946,
+      "arches": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64"
+      ],
+      "notes": "First release."
+    }
+  ]
+}

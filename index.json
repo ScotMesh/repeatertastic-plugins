@@ -1,8 +1,45 @@
 {
   "version": 1,
-  "updated": "2026-09-18T18:32:17Z",
+  "updated": "2026-09-18T18:38:08Z",
   "name": "ScotMesh plugin store",
   "plugins": [
+    {
+      "id": "homeassistant",
+      "name": "Home Assistant",
+      "summary": "Community built. Your site and the nodes you pick, in Home Assistant, as devices with sensors.",
+      "description": "Community built, and not affiliated with or endorsed by Home Assistant. Publishes your site and the nodes you pick to Home Assistant over MQTT, as devices with sensors, with nothing to configure at the Home Assistant end.",
+      "author": "ScotMesh",
+      "homepage": "https://github.com/ScotMesh/repeatertastic-homeassistant",
+      "license": "GPL-3.0-or-later",
+      "logo": "logos/homeassistant.png",
+      "permissions": [
+        "status.read",
+        "nodes.read",
+        "messages.read"
+      ],
+      "network": [
+        "your Home Assistant MQTT broker"
+      ],
+      "latest": {
+        "version": "0.1.0",
+        "api": 1,
+        "min_host": "0.4.0",
+        "released": "2026-09-18T18:37:41Z",
+        "url": "https://github.com/ScotMesh/repeatertastic-homeassistant/releases/download/v0.1.0/repeatertastic-homeassistant-v0.1.0.zip",
+        "sha256": "a08216863bbb254b25ef19098f305fcc4be4ca01bbedba96261a58f693a2fa80",
+        "size": 14160946,
+        "arches": [
+          "linux/amd64",
+          "linux/arm",
+          "linux/arm64"
+        ],
+        "notes": "First release."
+      },
+      "tags": [
+        "home automation",
+        "mqtt"
+      ]
+    },
     {
       "id": "meshflow",
       "name": "Meshflow",
