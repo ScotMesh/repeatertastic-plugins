@@ -33,19 +33,20 @@ does the downloading, the checking and the running.
 
 Open a pull request with:
 
-- `plugins/<id>.json` — every release you want nodes to be able to install.
+- `plugins/<id>.json` — every release you want on record.
 - `logos/<id>.png` (or `.svg`, or `.webp`) — square, 256×256 or larger, transparent
-  background.
+  background. **Add a release** takes this out of the bundle for you.
 - an entry in `index.json` whose `latest` block is copied from the newest
   release in your `plugins/<id>.json`.
 
 `<id>` must match the `id` in your bundle's `plugin.yaml`, because that is what
 the node installs and upgrades by.
 
-CI checks the schema, that the logo exists, that `latest` agrees with your
-plugin file, and that each download URL answers with the size you claimed. Put
-**deep check** in the pull request title and it will also download every bundle
-and verify the sha256 — worth doing when a release lands, wasteful otherwise.
+CI checks the schema — for `index.json` **and** every release in your plugin
+file — that the logo exists, that `latest` agrees with your plugin file, and that
+each download is a release of the repo in your `homepage`. When a pull request
+touches a plugin it downloads every bundle and verifies the sha256 itself, so the
+checksum in the store is never taken on trust.
 
 Check it yourself before pushing:
 
@@ -87,9 +88,10 @@ gh workflow run add-release.yml -R ScotMesh/repeatertastic-plugins \
 That needs a token with `actions: write` on this repo, which is why the plugin
 repo asks rather than committing here itself.
 
-Old releases stay in `plugins/<id>.json`. A node on an older RepeaterTastic
-installs the newest release whose `min_host` it satisfies, so leaving history in
-place is what lets old nodes keep working.
+Old releases stay in `plugins/<id>.json` as a record: the checksum and download
+address of every version, so one can be installed by hand or rolled back to.
+Nodes themselves only ever install `latest` — a node too old for it is told so
+rather than offered an older build.
 
 ## The fields
 
@@ -103,7 +105,8 @@ place is what lets old nodes keep working.
 | `latest.api` | The plugin API version the bundle speaks. A node that speaks an older API says so instead of installing. |
 | `latest.min_host` | Oldest RepeaterTastic that can run it. |
 | `latest.arches` | A Pi will not be offered an amd64-only bundle. |
-| `latest.sha256` | Checked on download. This is the only thing standing between a node and a swapped asset, so it is required. |
+| `latest.sha256` | Checked on download, and verified independently by CI. This is the only thing standing between a node and a swapped asset. |
+| `homepage` | Must be `https:` — the node renders it as a link in its own web page — and a GitHub repo's downloads must come from that repo's releases. |
 | `image` | For plugins that run in their own container. The node shows how to attach it rather than an Install button, because it cannot install into a container it does not own. |
 
 ## Docker

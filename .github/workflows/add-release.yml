@@ -42,29 +42,50 @@ jobs:
 
       - run: pip install --quiet jsonschema pyyaml
 
+      # Every input reaches the script through the environment, never through ${{ }} pasted into
+      # the shell. This job holds a token that can write to this repo, and the people who trigger
+      # it are exactly the ones the pull-request review exists to distrust.
       - name: Read the release into the store
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ inputs.repo }}
+          TAG: ${{ inputs.tag }}
+          NOTES: ${{ inputs.notes }}
+          MIN_HOST: ${{ inputs.min_host }}
         run: |
-          python scripts/add_release.py "${{ inputs.repo }}" "${{ inputs.tag }}" \
-            ${{ inputs.notes && format('--notes {0}', toJSON(inputs.notes)) || '' }} \
-            ${{ inputs.min_host && format('--min-host {0}', inputs.min_host) || '' }}
+          args=("$REPO" "$TAG")
+          [ -n "$NOTES" ] && args+=(--notes "$NOTES")
+          [ -n "$MIN_HOST" ] && args+=(--min-host "$MIN_HOST")
+          python scripts/add_release.py "${args[@]}"
 
       # Offline here: the download just happened, so the URL is known good, and the checksum came
       # from those very bytes. The pull request's own run does the reachability check.
       - name: Check the index
         run: python scripts/validate.py --offline
 
+      # The script writes what it read out of the bundle; these are only used for the branch and
+      # the description, and come from the id the bundle itself declares rather than the input.
+      - name: Name the change
+        id: name
+        env:
+          REPO: ${{ inputs.repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          slug=$(printf '%s-%s' "$REPO" "$TAG" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-80)
+          {
+            echo "slug=$slug"
+            echo "repo=$REPO"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: peter-evans/create-pull-request@v7
         with:
-          branch: add/${{ inputs.repo }}-${{ inputs.tag }}
-          title: "${{ inputs.repo }} ${{ inputs.tag }}"
-          commit-message: "Add ${{ inputs.repo }} ${{ inputs.tag }}"
+          branch: add/${{ steps.name.outputs.slug }}
+          title: "${{ steps.name.outputs.repo }} ${{ steps.name.outputs.tag }}"
+          commit-message: "Add ${{ steps.name.outputs.repo }} ${{ steps.name.outputs.tag }}"
           body: |
-            Added by **Add a release** from [${{ inputs.repo }} ${{ inputs.tag }}](https://github.com/${{ inputs.repo }}/releases/tag/${{ inputs.tag }}).
+            Added by **Add a release** from `${{ steps.name.outputs.repo }}` `${{ steps.name.outputs.tag }}`.
 
             The checksum, size, architectures, version and permissions were read out of the
-            published bundle, so they cannot disagree with what nodes will download.
-
-            Put **deep check** in this title to have CI download the bundle and verify the
-            checksum independently before merging.
+            published bundle, so they cannot disagree with what nodes will download. CI downloads
+            every bundle a pull request touches and verifies the checksum independently.

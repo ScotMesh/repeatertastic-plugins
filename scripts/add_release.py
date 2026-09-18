@@ -30,8 +30,16 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# The same ids the schema and the daemon accept. This gates a value that comes out of a zip
+# published by someone else, before it is ever joined to a path.
+ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
+
 # The architectures a bundle can carry, by the suffix its binaries use.
 ARCHES = {"amd64": "linux/amd64", "arm64": "linux/arm64", "arm": "linux/arm"}
+
+# What a card may carry, matching the daemon's own list.
+LOGO_TYPES = (".png", ".svg", ".webp")
+MAX_LOGO = 1 << 20
 
 
 def run(*args):
@@ -50,7 +58,7 @@ def release_asset(repo, tag):
 
 
 def read_bundle(path):
-    """The manifest and the architectures the bundle actually carries."""
+    """The manifest, the architectures the bundle carries, and its logo if it has one."""
     with zipfile.ZipFile(path) as z:
         names = z.namelist()
         prefix = ""
@@ -65,9 +73,16 @@ def read_bundle(path):
             for suffix, tag in ARCHES.items()
             if re.search(rf"-linux-{suffix}$", name)
         })
+        logo = None
+        named = str(manifest.get("logo") or "")
+        ext = pathlib.Path(named).suffix.lower()
+        if named and ext in LOGO_TYPES and prefix + named in names:
+            body = z.read(prefix + named)
+            if len(body) <= MAX_LOGO:
+                logo = (ext, body)
     if not arches:
         sys.exit("no linux binaries named ...-linux-<arch> in the bundle")
-    return manifest, arches
+    return manifest, arches, logo
 
 
 def download(url, dest):
@@ -97,7 +112,10 @@ def save(path, data):
 
 
 def version_key(v):
-    return [int(p) for p in v.split("-")[0].split(".")]
+    """Sortable form, numeric part by numeric part. A part that isn't a number sorts lowest
+    rather than raising, so a surprising version is reported by the schema, not a traceback."""
+    return [int(p) if p.isdigit() else -1
+            for p in str(v).split("+")[0].split("-")[0].split(".")]
 
 
 def main():
@@ -115,9 +133,11 @@ def main():
         bundle = pathlib.Path(tmp) / asset["name"]
         print(f"downloading {asset['name']}")
         sha256, size = download(asset["url"], bundle)
-        manifest, arches = read_bundle(bundle)
+        manifest, arches, logo = read_bundle(bundle)
 
-    pid = manifest["id"]
+    pid = str(manifest.get("id", ""))
+    if not ID.match(pid):
+        sys.exit(f"the bundle's id is not one this store accepts: {pid!r}")
     version = str(manifest["version"])
     if version != args.tag.lstrip("v"):
         sys.exit(f"the bundle says version {version} but the tag is {args.tag}")
@@ -153,6 +173,13 @@ def main():
     detail["releases"].sort(key=lambda r: version_key(r["version"]))
     save(f"plugins/{pid}.json", detail)
 
+    logo_path = None
+    if logo is not None:
+        ext, body = logo
+        logo_path = f"logos/{pid}{ext}"
+        (ROOT / "logos").mkdir(exist_ok=True)
+        (ROOT / logo_path).write_bytes(body)
+
     index = load("index.json", {"version": 1, "plugins": []})
     entry = next((p for p in index["plugins"] if p["id"] == pid), None)
     if entry is None:
@@ -167,7 +194,7 @@ def main():
             "author": manifest.get("author", ""),
             "homepage": manifest.get("homepage", f"https://github.com/{args.repo}"),
             "license": manifest.get("license", ""),
-            "logo": f"logos/{pid}.png",
+            "logo": logo_path or f"logos/{pid}.png",
             "permissions": list(manifest.get("permissions", [])),
             "network": list(manifest.get("network", [])),
         }
@@ -177,10 +204,16 @@ def main():
     else:
         # The permissions on the card have to be the ones the plugin actually asks for.
         entry["permissions"] = list(manifest.get("permissions", []))
+        if logo_path:
+            entry["logo"] = logo_path
         if manifest.get("network"):
             entry["network"] = list(manifest["network"])
 
-    entry["latest"] = release
+    current = entry.get("latest") or {}
+    if version_key(version) >= version_key(current.get("version", "")):
+        entry["latest"] = release
+    else:
+        print(f"kept {current['version']} as latest: {version} is older")
     index["updated"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     save("index.json", index)
 

@@ -41,22 +41,46 @@ def check_schema(index):
     try:
         import jsonschema
     except ImportError:
-        print("  jsonschema not installed, skipping schema pass")
+        fail("schema", "jsonschema is not installed, so the schema was never checked")
         return
     schema = load("schema/store-v1.json")
     if schema is None:
         return
-    validator = jsonschema.Draft202012Validator(schema)
-    for e in sorted(validator.iter_errors(index), key=lambda e: e.path):
-        where = "index.json" + "".join(f"[{p!r}]" for p in e.path)
+    report(jsonschema.Draft202012Validator(schema), index, "index.json")
+
+    # Every release of every plugin, not just the one index.json calls latest. Without this, an
+    # older release could carry anything at all.
+    detail_schema = dict(schema)
+    detail_schema.pop("$id", None)
+    detail_schema.update({"$ref": "#/$defs/detail"})
+    for key in ("type", "required", "additionalProperties", "properties"):
+        detail_schema.pop(key, None)
+    validator = jsonschema.Draft202012Validator(detail_schema)
+    for plugin in index.get("plugins", []):
+        pid = plugin.get("id")
+        detail = load(f"plugins/{pid}.json")
+        if detail is not None:
+            report(validator, detail, f"plugins/{pid}.json")
+
+
+def report(validator, document, name):
+    for e in sorted(validator.iter_errors(document), key=lambda e: list(e.path)):
+        where = name + "".join(f"[{p!r}]" for p in e.path)
         fail(where, e.message)
 
 
+def version_key(version):
+    """Sortable form of a version, comparing numerically so 0.10.0 beats 0.9.0. Anything that
+    isn't a number sorts lowest rather than raising: a bad version is the schema's finding to
+    report, not a stack trace out of here."""
+    out = []
+    for part in str(version).split("+")[0].split("-")[0].split("."):
+        out.append(int(part) if part.isdigit() else -1)
+    return out
+
+
 def newest(releases):
-    """Highest version, comparing numerically so 0.10.0 beats 0.9.0."""
-    def key(r):
-        return [int(p) for p in r["version"].split("-")[0].split(".")]
-    return max(releases, key=key)
+    return max(releases, key=lambda r: version_key(r.get("version", "")))
 
 
 def check_consistency(index):
@@ -82,11 +106,21 @@ def check_consistency(index):
             fail(f"plugins/{pid}.json", "no releases")
             continue
 
-        versions = [r["version"] for r in releases]
+        versions = [r.get("version") for r in releases]
         if len(set(versions)) != len(versions):
             fail(f"plugins/{pid}.json", "the same version is listed twice")
 
+        home = (plugin.get("homepage") or "").rstrip("/")
+        if home.startswith("https://github.com/"):
+            want = home + "/releases/download/"
+            for r in releases:
+                if not str(r.get("url", "")).startswith(want):
+                    fail(f"plugins/{pid}.json {r.get('version')}",
+                         f"the download is not a release of {home}: {r.get('url')}")
+
         latest = plugin.get("latest", {})
+        if not latest and plugin.get("image"):
+            continue  # an attached plugin has a container, not a bundle
         top = newest(releases)
         if latest.get("version") != top["version"]:
             fail(where, f"latest is {latest.get('version')}, "

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -28,8 +29,9 @@ jobs:
       - name: Check the index
         run: python scripts/validate.py --offline
 
-      # One HEAD per download URL. Only when a plugin file actually changed,
-      # because every other push would be paying for the same answer.
+      # When a pull request touches a plugin, download every bundle and verify its sha256
+      # independently. That checksum is the only thing between a node and a swapped asset, so it
+      # is worth the minutes; pushes that change nothing about a plugin skip it.
       - name: Did a plugin file change?
         id: changed
         run: |
@@ -42,12 +44,6 @@ jobs:
             echo "yes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check every download is really there
+      - name: Verify every download and its checksum
         if: steps.changed.outputs.yes == 'true'
-        run: python scripts/validate.py
-
-      # The full download and sha256. Minutes, so it waits to be asked: put
-      # "deep check" in the pull request title when a release lands.
-      - name: Verify the checksums
-        if: contains(github.event.pull_request.title, 'deep check')
         run: python scripts/validate.py --deep

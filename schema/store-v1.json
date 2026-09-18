@@ -7,21 +7,36 @@
   "additionalProperties": false,
   "properties": {
     "version": { "const": 1 },
-    "updated": { "type": "string", "format": "date-time" },
+    "updated": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
     "name": { "type": "string", "maxLength": 80 },
     "plugins": { "type": "array", "items": { "$ref": "#/$defs/plugin" } }
   },
   "$defs": {
-    "plugin": {
+    "detail": {
+      "title": "plugins/<id>.json: every release of one plugin",
       "type": "object",
-      "required": ["id", "name", "summary", "author", "homepage", "license", "permissions", "latest"],
+      "required": ["id", "releases"],
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Matches plugin.yaml's id: this is what the host installs and upgrades by.",
-          "pattern": "^[a-z][a-z0-9-]{1,39}$"
-        },
+        "id": { "$ref": "#/$defs/id" },
+        "releases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/release" } }
+      }
+    },
+    "id": {
+      "type": "string",
+      "description": "Matches plugin.yaml's id: this is what the host installs and upgrades by.",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,39}$"
+    },
+    "plugin": {
+      "type": "object",
+      "required": ["id", "name", "summary", "author", "homepage", "license", "permissions"],
+      "anyOf": [
+        { "required": ["latest"], "title": "a bundle the node installs" },
+        { "required": ["image"], "title": "a container the operator attaches" }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string", "maxLength": 60 },
         "summary": {
           "type": "string",
@@ -30,7 +45,12 @@
         },
         "description": { "type": "string", "maxLength": 2000 },
         "author": { "type": "string", "maxLength": 80 },
-        "homepage": { "type": "string", "format": "uri" },
+        "homepage": {
+          "type": "string",
+          "description": "Shown as a link in the GUI, so it has to be https: a javascript: URL here would run in the node's own web page.",
+          "pattern": "^https://",
+          "maxLength": 300
+        },
         "license": { "type": "string", "maxLength": 40 },
         "logo": {
           "type": "string",
@@ -64,14 +84,14 @@
       "required": ["version", "api", "url", "sha256", "size", "arches"],
       "additionalProperties": false,
       "properties": {
-        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" },
         "api": { "type": "integer", "minimum": 1, "description": "Plugin API version the bundle speaks." },
         "min_host": {
           "type": "string",
           "description": "Oldest RepeaterTastic that can run it, so an old host says so rather than installing and failing.",
-          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
         },
-        "released": { "type": "string", "format": "date-time" },
+        "released": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
         "url": { "type": "string", "format": "uri", "pattern": "^https://" },
         "sha256": {
           "type": "string",
