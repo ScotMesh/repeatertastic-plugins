@@ -1,0 +1,108 @@
+# RepeaterTastic plugins
+
+The list of plugins RepeaterTastic offers under **Plugins → Browse store**. It is
+a few JSON files and some logos — no server, no accounts, no code. Your node
+fetches `index.json` from here, shows you what is available, and downloads the
+bundle straight from the plugin's own GitHub release.
+
+Default address, which every node uses unless you point it somewhere else:
+
+```
+https://raw.githubusercontent.com/ScotMesh/repeatertastic-plugins/main/index.json
+```
+
+Run your own store by forking this repo and setting `plugins.store_url` in
+`repeatertastic.yaml` to your copy. Nothing here is privileged; a node will read
+any store you tell it to.
+
+## What your node does with it
+
+1. Fetches `index.json` (cached, and re-fetched with `If-None-Match`, so a node
+   that checks hourly costs GitHub one 304 an hour).
+2. Draws a card per plugin from the index: name, summary, logo, the permissions
+   it will ask for, and what it talks to over the network.
+3. On install, downloads `latest.url`, **checks the sha256 against the index**
+   and refuses the bundle if it disagrees, then unpacks it under the node's
+   plugin directory and starts it exactly like a hand-installed plugin.
+4. Compares `latest.version` with what is installed, and offers the update.
+
+The store never runs anything. It is a list of addresses and checksums; the node
+does the downloading, the checking and the running.
+
+## Adding a plugin
+
+Open a pull request with:
+
+- `plugins/<id>.json` — every release you want nodes to be able to install.
+- `logos/<id>.png` — square, 256×256 or larger, transparent background.
+- an entry in `index.json` whose `latest` block is copied from the newest
+  release in your `plugins/<id>.json`.
+
+`<id>` must match the `id` in your bundle's `plugin.yaml`, because that is what
+the node installs and upgrades by.
+
+CI checks the schema, that the logo exists, that `latest` agrees with your
+plugin file, and that each download URL answers with the size you claimed. Put
+**deep check** in the pull request title and it will also download every bundle
+and verify the sha256 — worth doing when a release lands, wasteful otherwise.
+
+Check it yourself before pushing:
+
+```
+pip install jsonschema
+python scripts/validate.py          # everything
+python scripts/validate.py --offline # no network
+python scripts/validate.py --deep    # also download and hash every bundle
+```
+
+### Releasing a new version
+
+Bump `plugins/<id>.json` with the new release, copy it into `index.json`'s
+`latest`, and open a pull request. The sha256 and size are whatever GitHub
+serves:
+
+```
+curl -sL -o bundle.zip <the release asset URL>
+sha256sum bundle.zip
+stat -c %s bundle.zip
+```
+
+Plugins built from the shared `scripts/bundle.sh` get this opened for them by
+their release workflow.
+
+Old releases stay in `plugins/<id>.json`. A node on an older RepeaterTastic
+installs the newest release whose `min_host` it satisfies, so leaving history in
+place is what lets old nodes keep working.
+
+## The fields
+
+`schema/store-v1.json` is the authority. The ones worth explaining:
+
+| Field | Why it is there |
+| --- | --- |
+| `summary` | One line, on the card. `description` is the long form on the detail panel. |
+| `permissions` | Shown **before** install, so nobody grants blind. Must match what the plugin actually asks the host for. |
+| `network` | Plain English, one line per thing it talks to. An empty list means it never leaves the node. |
+| `latest.api` | The plugin API version the bundle speaks. A node that speaks an older API says so instead of installing. |
+| `latest.min_host` | Oldest RepeaterTastic that can run it. |
+| `latest.arches` | A Pi will not be offered an amd64-only bundle. |
+| `latest.sha256` | Checked on download. This is the only thing standing between a node and a swapped asset, so it is required. |
+| `image` | For plugins that run in their own container. The node shows how to attach it rather than an Install button, because it cannot install into a container it does not own. |
+
+## Docker
+
+Managed plugins run inside the RepeaterTastic container — the daemon downloads
+and supervises them, so store installs work in Docker with nothing mounted and
+no access to the Docker socket. Keep the plugin directory on a volume
+(`-v rt-data:/data`) and installs survive an image upgrade.
+
+A plugin that genuinely needs its own container ships an `image` instead of a
+bundle. Those are attached, not installed: you run the container yourself and
+point it at the node's plugin socket. The store lists them so they are
+discoverable, and the node shows the command rather than pretending it can do it
+for you.
+
+## Licence
+
+The index and schema are CC0. Each plugin carries its own licence — see its
+`license` field and its repo.

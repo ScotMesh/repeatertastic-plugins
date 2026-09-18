@@ -1,0 +1,20 @@
+{
+  "id": "meshflow",
+  "releases": [
+    {
+      "version": "0.1.1",
+      "api": 1,
+      "min_host": "0.3.0",
+      "released": "2026-09-15T19:00:58Z",
+      "url": "https://github.com/ScotMesh/repeatertastic-meshflow/releases/download/v0.1.1/repeatertastic-meshflow-v0.1.1.zip",
+      "sha256": "90f0fef1ae4732c0938e4a33829e5fefd7df24f1a406b0061a025b82aa884827",
+      "size": 14498857,
+      "arches": [
+        "linux/amd64",
+        "linux/arm64",
+        "linux/arm"
+      ],
+      "notes": "First public release."
+    }
+  ]
+}

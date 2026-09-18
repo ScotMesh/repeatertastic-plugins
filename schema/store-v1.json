@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scotmesh.github.io/repeatertastic-plugins/schema/store-v1.json",
+  "title": "RepeaterTastic plugin store index, version 1",
+  "type": "object",
+  "required": ["version", "updated", "plugins"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "updated": { "type": "string", "format": "date-time" },
+    "name": { "type": "string", "maxLength": 80 },
+    "plugins": { "type": "array", "items": { "$ref": "#/$defs/plugin" } }
+  },
+  "$defs": {
+    "plugin": {
+      "type": "object",
+      "required": ["id", "name", "summary", "author", "homepage", "license", "permissions", "latest"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Matches plugin.yaml's id: this is what the host installs and upgrades by.",
+          "pattern": "^[a-z][a-z0-9-]{1,39}$"
+        },
+        "name": { "type": "string", "maxLength": 60 },
+        "summary": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "One line for the card. The long form goes in description."
+        },
+        "description": { "type": "string", "maxLength": 2000 },
+        "author": { "type": "string", "maxLength": 80 },
+        "homepage": { "type": "string", "format": "uri" },
+        "license": { "type": "string", "maxLength": 40 },
+        "logo": {
+          "type": "string",
+          "description": "Path within this repo. Shown before install, when no bundle exists yet.",
+          "pattern": "^logos/[a-z0-9-]+\\.png$"
+        },
+        "tags": { "type": "array", "items": { "type": "string", "maxLength": 24 }, "maxItems": 6 },
+        "permissions": {
+          "type": "array",
+          "description": "What the plugin will ask for, shown before install rather than after.",
+          "items": {
+            "enum": ["packets.read", "nodes.read", "messages.read", "messages.send",
+                     "traceroute.send", "status.read"]
+          }
+        },
+        "network": {
+          "type": "array",
+          "description": "Plain-English list of what it talks to. Empty means nothing outside the host.",
+          "items": { "type": "string", "maxLength": 80 }
+        },
+        "image": {
+          "type": "string",
+          "description": "Attached-only plugins that run in their own container. The host shows how to run it instead of an Install button, because it cannot install into someone else's container.",
+          "maxLength": 200
+        },
+        "latest": { "$ref": "#/$defs/release" }
+      }
+    },
+    "release": {
+      "type": "object",
+      "required": ["version", "api", "url", "sha256", "size", "arches"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+" },
+        "api": { "type": "integer", "minimum": 1, "description": "Plugin API version the bundle speaks." },
+        "min_host": {
+          "type": "string",
+          "description": "Oldest RepeaterTastic that can run it, so an old host says so rather than installing and failing.",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"
+        },
+        "released": { "type": "string", "format": "date-time" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Verified by the host before the bundle is unpacked."
+        },
+        "size": { "type": "integer", "minimum": 1, "maximum": 104857600 },
+        "arches": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["linux/amd64", "linux/arm64", "linux/arm"] }
+        },
+        "notes": { "type": "string", "maxLength": 500, "description": "What changed, for the update card." }
+      }
+    }
+  }
+}

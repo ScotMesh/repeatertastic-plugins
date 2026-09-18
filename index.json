@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "updated": "2026-09-18T16:00:00Z",
+  "name": "ScotMesh plugin store",
+  "plugins": [
+    {
+      "id": "meshflow",
+      "name": "Meshflow",
+      "summary": "Reports what each radio hears to Meshflow, and runs the traceroutes it asks for.",
+      "description": "Feeds Meshflow as an identity on each radio (its relay persona unless you choose another). It uploads the packets and nodes that identity hears and runs the traceroutes Meshflow asks for.",
+      "author": "ScotMesh",
+      "homepage": "https://github.com/ScotMesh/repeatertastic-meshflow",
+      "license": "GPL-3.0-or-later",
+      "logo": "logos/meshflow.png",
+      "tags": [
+        "mapping",
+        "uplink"
+      ],
+      "permissions": [
+        "packets.read",
+        "nodes.read",
+        "traceroute.send"
+      ],
+      "network": [
+        "your Meshflow API server"
+      ],
+      "latest": {
+        "version": "0.1.1",
+        "api": 1,
+        "min_host": "0.3.0",
+        "released": "2026-09-15T19:00:58Z",
+        "url": "https://github.com/ScotMesh/repeatertastic-meshflow/releases/download/v0.1.1/repeatertastic-meshflow-v0.1.1.zip",
+        "sha256": "90f0fef1ae4732c0938e4a33829e5fefd7df24f1a406b0061a025b82aa884827",
+        "size": 14498857,
+        "arches": [
+          "linux/amd64",
+          "linux/arm64",
+          "linux/arm"
+        ],
+        "notes": "First public release."
+      }
+    }
+  ]
+}

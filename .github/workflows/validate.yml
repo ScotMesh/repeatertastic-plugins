@@ -1,0 +1,50 @@
+name: Validate the store
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet jsonschema
+
+      # Schema, ids, logos and versions. No network, so it is quick and it is
+      # what most pull requests need.
+      - name: Check the index
+        run: python scripts/validate.py --offline
+
+      # One HEAD per download URL. Only when a plugin file actually changed,
+      # because every other push would be paying for the same answer.
+      - name: Did a plugin file change?
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$base" HEAD | grep -qE '^(index\.json|plugins/)'; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check every download is really there
+        if: steps.changed.outputs.yes == 'true'
+        run: python scripts/validate.py
+
+      # The full download and sha256. Minutes, so it waits to be asked: put
+      # "deep check" in the pull request title when a release lands.
+      - name: Verify the checksums
+        if: contains(github.event.pull_request.title, 'deep check')
+        run: python scripts/validate.py --deep
